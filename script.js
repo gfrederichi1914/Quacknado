@@ -7,9 +7,44 @@ canvas.height = 600;
 const CONFIG = {
     PATO_VELOCIDADE_BASE: 3.5,
     BALAS_VELOCIDADE_BASE: 7,
-    FIRE_RATE_BASE: 150,
+    FIRE_RATE_BASE: 200,
     INIMIGO_VELOCIDADE: 1.5,
 };
+
+// --- NOVAS CONSTANTES DE INIMIGOS (TEMPLATES) ---
+const INIMIGO_TAMANHO_BASE = 40;
+const INIMIGO_VELOCIDADE_BASE = CONFIG.INIMIGO_VELOCIDADE;
+const INIMIGO_VIDA_BASE = 4; 
+
+// Mapeamento de Tipos de Inimigos (Templates)
+const TIPOS_INIMIGOS = {
+    // Caranguejo Padrão
+    NORMAL: {
+        tipo: 'normal',
+        tamanho: INIMIGO_TAMANHO_BASE,
+        velocidade: INIMIGO_VELOCIDADE_BASE,
+        vidaMaxima: INIMIGO_VIDA_BASE,
+        pontuacao: 1, 
+        scoreValue: 10, 
+        spawnChance: 90,
+        cor: '#8b4513' 
+    },
+    // Caranguejo Tanque (Roxo)
+    TANQUE: {
+        tipo: 'tanque',
+        tamanho: INIMIGO_TAMANHO_BASE * 2,
+        velocidade: INIMIGO_VELOCIDADE_BASE / 2,
+        vidaMaxima: INIMIGO_VIDA_BASE * 4, // 9 hits
+        pontuacao: 5, 
+        scoreValue: 50,
+        spawnChance: 10,
+        cor: '#4b0082' // Roxo Escuro
+    }
+};
+
+const tiposInimigoArray = Object.values(TIPOS_INIMIGOS);
+// ----------------------------------------------------
+
 
 // Controle de melhoria
 let estaEmMelhoria = false; 
@@ -18,8 +53,8 @@ const LIMIAR_MELHORIA = 10;
 
 // Opções de melhorias
 const CUSTO_MELHORIA = 5; 
-const OPCOES_MELHORIA = [ // 
-    { nome: "Ataque Rápido", descricao: "Taxa de Tiro (Cadência)", atributo: "CADENCIA_MOD", custo: CUSTO_MELHORIA },
+const OPCOES_MELHORIA = [ 
+    { nome: "Ataque Rápido", descricao: "Taxa de Tiro e Spawn", atributo: "CADENCIA_MOD", custo: CUSTO_MELHORIA },
     { nome: "Motor Potente", descricao: "Velocidade do Pato", atributo: "PATO_VELOCIDADE_MOD", custo: CUSTO_MELHORIA },
     { nome: "Semente Forte", descricao: "Velocidade do Projétil", atributo: "BALA_VELOCIDADE_MOD", custo: CUSTO_MELHORIA }
 ];
@@ -30,6 +65,13 @@ const pato_tamanho = 100;
 let balas_velocidade = CONFIG.BALAS_VELOCIDADE_BASE; 
 let fire_rate = CONFIG.FIRE_RATE_BASE; 
 
+// Variáveis de dificuldade
+let spawn_rate_base = 2000;
+let spawn_rate = 2000; // Será reduzido a cada upgrade de cadência
+let tanque_chance_mod = 0; // Será aumentado a cada upgrade
+let lastSpawnTime = 0;
+
+
 // Objeto pato 
 let pato = {
     x: canvas.width / 2 - pato_tamanho / 2,
@@ -37,11 +79,9 @@ let pato = {
     vida: 5,
 };
 
-// Objeto Inimigos
-let inimigo = []; 
-const inimigo_tamanho = 40;
-const spawn_rate = 2000;
-let lastSpawnTime = 0;
+// Objeto Inimigos (Array)
+let inimigos = []; 
+
 
 // Variáveis de Estado de Jogo e Recompensas
 let isGameOver = false; 
@@ -50,10 +90,7 @@ let score = 0;
 
 // Objeto Background
 let background = {
-    x: 0,
-    y: 0,
-    width: canvas.width, 
-    height: canvas.height + 50
+    x: 0, y: 0, width: canvas.width, height: canvas.height + 50
 };
 
 // Objeto para rastrear teclas pressionadas
@@ -81,10 +118,13 @@ bgImg.onload = () => { bgLoaded = true; };
 
 // FUNÇÃO DE DETECÇÃO DE COLISÃO (Box-to-Box)
 function checkCollision(objA, objB) {
-    return objA.x < objB.x + objB.size &&
-           objA.x + objA.size > objB.x &&
-           objA.y < objB.y + objB.size &&
-           objA.y + objA.size > objB.y;
+    const sizeA = objA.size || pato_tamanho;
+    const sizeB = objB.size || pato_tamanho;
+
+    return objA.x < objB.x + sizeB &&
+           objA.x + sizeA > objB.x &&
+           objA.y < objB.y + sizeB &&
+           objA.y + sizeA > objB.y;
 }
 
 // FUNÇÃO DE CRIAÇÃO DE PROJÉTIL
@@ -100,41 +140,53 @@ function criaBala(dirX, dirY) {
     balas.push(bala);
 }
 
+// Função auxiliar para selecionar o template do inimigo (AGORA DINÂMICA)
+function selecionaTipoInimigo() {
+    const rand = Math.random() * 100;
+    
+    // Calcula a chance real do Tanque (base 10% + modificador, limitando a 70%)
+    let chanceTanqueAtual = TIPOS_INIMIGOS.TANQUE.spawnChance + tanque_chance_mod;
+    chanceTanqueAtual = Math.min(chanceTanqueAtual, 70); 
+    
+    
+    if (rand < chanceTanqueAtual) {
+        return TIPOS_INIMIGOS.TANQUE;
+    } else {
+        return TIPOS_INIMIGOS.NORMAL;
+    }
+}
+
 // Função de Criação de Inimigo (Spawn)
-function criaCaranguejo() {
+function criaInimigo() {
+    const template = selecionaTipoInimigo(); 
+    
     let x, y;
     const padding = 60; 
     let side = Math.floor(Math.random() * 4); 
 
     switch (side) {
-        case 0: 
-            x = Math.random() * canvas.width;
-            y = -padding;
-            break;
-        case 1: 
-            x = Math.random() * canvas.width;
-            y = canvas.height + padding;
-            break;
-        case 2: 
-            x = -padding;
-            y = Math.random() * canvas.height;
-            break;
-        case 3: 
-            x = canvas.width + padding;
-            y = Math.random() * canvas.height;
-            break;
+        case 0: x = Math.random() * canvas.width; y = -padding; break;
+        case 1: x = Math.random() * canvas.width; y = canvas.height + padding; break;
+        case 2: x = -padding; y = Math.random() * canvas.height; break;
+        case 3: x = canvas.width + padding; y = Math.random() * canvas.height; break;
     }
 
-    const caranguejo = {
+    const novoInimigo = {
         x: x,
         y: y,
-        size: inimigo_tamanho, 
-        velocidade: CONFIG.INIMIGO_VELOCIDADE, 
-        vida: 3, 
+        tipo: template.tipo,
+        size: template.tamanho, 
+        velocidade: template.velocidade, 
+        vida: template.vidaMaxima, 
+        vidaMaxima: template.vidaMaxima, 
+        pontuacao: template.pontuacao,
+        scoreValue: template.scoreValue,
+        cor: template.cor,
     };
 
-    inimigo.push(caranguejo);
+    inimigos.push(novoInimigo);
 }
+
 
 // Função de Controle de Estado
 function gameOver() {
@@ -149,29 +201,34 @@ function resetGame() {
     peixesDeOuro = 0;
     score = 0;
     
-    // Resetando variáveis de velocidade para BASE (Solução para aceleração)
+    // Resetando variáveis de velocidade/frequência/dificuldade para BASE
     pato_velocidade = CONFIG.PATO_VELOCIDADE_BASE;
     fire_rate = CONFIG.FIRE_RATE_BASE;
     balas_velocidade = CONFIG.BALAS_VELOCIDADE_BASE;
+    spawn_rate = spawn_rate_base; // RESET DE SPAWN RATE
+    tanque_chance_mod = 0; // RESET DE CHANCE DO TANQUE
 
-    inimigo = [];
+    inimigos = []; 
     balas = [];
     
     pato.x = canvas.width / 2 - pato_tamanho / 2;
     pato.y = canvas.height / 2 - pato_tamanho / 2;
-
-    // Não chamamos requestAnimationFrame aqui, o gameLoop cuidará disso
 }
 
 // ADICIONADO: Função para Aplicar as Melhorias
-function aplicarMelhoria(atributoMelhoria, custo) { // (em vez de applyUpgrade)
+function aplicarMelhoria(atributoMelhoria, custo) { 
     if (peixesDeOuro >= custo) {
         peixesDeOuro -= custo;
         
-        // Aplica a melhoria no atributo mutável (let)
+        // 1. AUMENTO MAIS AGRESSIVO DA CHANCE DO TANQUE
+        tanque_chance_mod += 7; // Aumenta 7% a cada upgrade
+        
         if (atributoMelhoria === "CADENCIA_MOD") {
             // Aumentar a cadência significa DIMINUIR o tempo (fire_rate)
             fire_rate = Math.max(50, fire_rate - 20); 
+            
+            // 2. REDUÇÃO MAIS AGRESSIVA DO TEMPO DE SPAWN
+            spawn_rate = Math.max(500, spawn_rate - 100); // Reduz 100ms a cada upgrade de cadência
             
         } else if (atributoMelhoria === "PATO_VELOCIDADE_MOD") {
             pato_velocidade += 0.5;
@@ -180,8 +237,7 @@ function aplicarMelhoria(atributoMelhoria, custo) { // (em vez de applyUpgrade)
             balas_velocidade += 1.0;
         }
         
-        // Sai do menu e volta ao jogo
-        estaEmMelhoria = false; // (em vez de isUpgrading)
+        estaEmMelhoria = false; 
     } 
 }
 
@@ -210,6 +266,15 @@ function desenharMenuMelhoria() {
         ctx.font = '16px Arial';
         ctx.fillText(`Custo: ${opcao.custo} Ouro. Melhora: ${opcao.descricao}`, 150, inicioY + 25 + indice * 60);
     });
+    
+    // Mostra a dificuldade que virá
+    const chanceTanqueAtual = Math.min(TIPOS_INIMIGOS.TANQUE.spawnChance + tanque_chance_mod, 70);
+    const proximaChanceTanque = Math.min(chanceTanqueAtual + 4, 70);
+    const proximoSpawnRate = Math.max(500, spawn_rate - 100);
+
+    ctx.fillStyle = 'cyan';
+    ctx.font = '18px Arial';
+    ctx.fillText(`PRÓXIMA DIFICULDADE: Chance Tanque ~${proximaChanceTanque}% | Spawn Rate ~${proximoSpawnRate}ms`, 150, canvas.height - 100);
     
     ctx.fillStyle = 'white';
     ctx.font = '18px Arial';
@@ -277,19 +342,19 @@ function update() {
         }
     }
 
-    // 4. Lógica de Spawn de Inimigos (Timer)
+    // 4. Lógica de Spawn de Inimigos (Timer) - USANDO spawn_rate MUTÁVEL
     if (currentTime > lastSpawnTime + spawn_rate) {
-        criaCaranguejo();
+        criaInimigo();
         lastSpawnTime = currentTime;
     }
 
     // 5. Lógica de Movimento e Colisão dos Inimigos
-    for (let i = inimigo.length - 1; i >= 0; i--) {
-        const caranguejo = inimigo[i];
+    for (let i = inimigos.length - 1; i >= 0; i--) {
+        const inimigoObj = inimigos[i];
 
-        // IA de Perseguição 
-        let dx_inimigo = pato.x - caranguejo.x;
-        let dy_inimigo = pato.y - caranguejo.y;
+        // IA de Perseguição - USA inimigoObj.velocidade
+        let dx_inimigo = pato.x - inimigoObj.x;
+        let dy_inimigo = pato.y - inimigoObj.y;
         
         let magnitude = Math.sqrt(dx_inimigo * dx_inimigo + dy_inimigo * dy_inimigo);
 
@@ -297,29 +362,30 @@ function update() {
             let normalizedDx = dx_inimigo / magnitude;
             let normalizedDy = dy_inimigo / magnitude;
 
-            caranguejo.x += normalizedDx * caranguejo.velocidade;
-            caranguejo.y += normalizedDy * caranguejo.velocidade;
+            inimigoObj.x += normalizedDx * inimigoObj.velocidade;
+            inimigoObj.y += normalizedDy * inimigoObj.velocidade;
         }
         
         // Colisão (Tiro vs. Inimigo)
         for (let j = balas.length - 1; j >= 0; j--) {
             const bala = balas[j];
             
-            if (checkCollision(bala, caranguejo)) {
+            if (checkCollision(bala, inimigoObj)) { 
                 
-                caranguejo.vida -= 1;
+                inimigoObj.vida -= 1;
                 balas.splice(j, 1);
                 
-                if (caranguejo.vida <= 0) {
-                    inimigo.splice(i, 1);
-                    peixesDeOuro += 1;
-                    score += 10;
+                if (inimigoObj.vida <= 0) {
+                    peixesDeOuro += inimigoObj.pontuacao;
+                    score += inimigoObj.scoreValue;
+                    
+                    inimigos.splice(i, 1);
                     
                     // Lógica do Gatilho de Melhoria
                     inimigosDerrotadosDesdeMelhoria++;
                     if (inimigosDerrotadosDesdeMelhoria >= LIMIAR_MELHORIA) {
                         inimigosDerrotadosDesdeMelhoria = 0; 
-                        estaEmMelhoria = true; // PAUSA O JOGO
+                        estaEmMelhoria = true; 
                     }
                     
                     break; 
@@ -328,10 +394,10 @@ function update() {
         }
 
         // Colisão (Inimigo vs. Pato)
-        if (checkCollision(caranguejo, {x: pato.x, y: pato.y, size: pato_tamanho})) {
+        if (checkCollision(inimigoObj, {x: pato.x, y: pato.y, size: pato_tamanho})) {
             
             pato.vida -= 1;
-            inimigo.splice(i, 1); 
+            inimigos.splice(i, 1); 
 
             if (pato.vida <= 0) {
                 gameOver(); 
@@ -363,7 +429,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowRight') keys.right = true; 
 
     // Lógica de Seleção de Melhoria
-    if (estaEmMelhoria) { // Verifica se o jogo está em pausa
+    if (estaEmMelhoria) { 
         const indiceSelecionado = parseInt(e.key) - 1; 
         
         if (indiceSelecionado >= 0 && indiceSelecionado < OPCOES_MELHORIA.length) {
@@ -414,7 +480,17 @@ function drawHUD() {
     ctx.fillText(`Vida: ${pato.vida}`, 10, 25); 
     ctx.fillText(`Ouro: ${peixesDeOuro}`, 10, 50);
     
+    // HUD DE DEBUG
+    ctx.fillStyle = 'yellow';
+    ctx.font = '16px Arial';
+    const chanceTanqueAtual = Math.min(TIPOS_INIMIGOS.TANQUE.spawnChance + tanque_chance_mod, 70);
+
+    ctx.fillText(`Spawn Rate: ${spawn_rate.toFixed(0)} ms`, 10, 80);
+    ctx.fillText(`Chance Tanque: ${chanceTanqueAtual.toFixed(0)} %`, 10, 100);
+    
     ctx.textAlign = 'right';
+    ctx.fillStyle = 'white';
+    ctx.font = '20px Arial';
     ctx.fillText(`Score: ${score}`, canvas.width - 10, 25);
 }
 
@@ -444,15 +520,24 @@ function draw() {
         ctx.closePath();
     });
 
-    // Desenha os Inimigos 
-    inimigo.forEach(caranguejo => {
-        ctx.fillStyle = '#8b4513';
-        ctx.fillRect(caranguejo.x, caranguejo.y, caranguejo.size, caranguejo.size);
+    // Desenha os Inimigos
+    inimigos.forEach(inimigoObj => { 
+        ctx.fillStyle = inimigoObj.cor; 
+        ctx.fillRect(inimigoObj.x, inimigoObj.y, inimigoObj.size, inimigoObj.size);
         
         // Desenha barra de vida
-        ctx.fillStyle = 'lime';
-        const healthBarWidth = caranguejo.size * (caranguejo.vida / 3); 
-        ctx.fillRect(caranguejo.x, caranguejo.y - 10, healthBarWidth, 5); 
+        if (inimigoObj.vidaMaxima > 1) { 
+            const healthBarWidth = inimigoObj.size * (inimigoObj.vida / inimigoObj.vidaMaxima); 
+            const maxBarWidth = inimigoObj.size;
+
+            // Fundo da barra (preto)
+            ctx.fillStyle = 'black';
+            ctx.fillRect(inimigoObj.x, inimigoObj.y - 10, maxBarWidth, 5); 
+
+            // Vida atual (verde)
+            ctx.fillStyle = 'lime';
+            ctx.fillRect(inimigoObj.x, inimigoObj.y - 10, healthBarWidth, 5); 
+        }
     });
     
     // Desenha o HUD
@@ -463,11 +548,10 @@ function draw() {
 function gameLoop() {
     if (isGameOver) { 
         drawGameOverScreen(); 
-    } else if (estaEmMelhoria) { // ADICIONADO: Estado de Pausa/Melhoria
-        // Se estiver melhorando, desenha o cenário estático e o menu por cima.
+    } else if (estaEmMelhoria) { 
         draw(); 
         desenharMenuMelhoria(); 
-    } else if (patoLoaded && bgLoaded) { // Estado normal de Jogo Rodando
+    } else if (patoLoaded && bgLoaded) { 
         update();
         draw();
     } else {
@@ -484,6 +568,5 @@ function gameLoop() {
 
 // Inicia o loop
 window.onload = () => {
-    // Inicia o loop para que ele possa carregar os assets
     requestAnimationFrame(gameLoop);
 };
