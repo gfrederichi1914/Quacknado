@@ -4,7 +4,6 @@ const ctx = canvas.getContext('2d');
 canvas.width = 800;
 canvas.height = 600;
 
-// ADICIONADO: Objeto de Configuração BASE Imutável
 const CONFIG = {
     PATO_VELOCIDADE_BASE: 3.5,
     BALAS_VELOCIDADE_BASE: 7,
@@ -12,7 +11,20 @@ const CONFIG = {
     INIMIGO_VELOCIDADE: 1.5,
 };
 
-// ESTADO DO JOGO - Variáveis Mutáveis (Resetáveis)
+// Controle de melhoria
+let estaEmMelhoria = false; 
+let inimigosDerrotadosDesdeMelhoria = 0; 
+const LIMIAR_MELHORIA = 10; 
+
+// Opções de melhorias
+const CUSTO_MELHORIA = 5; 
+const OPCOES_MELHORIA = [ // 
+    { nome: "Ataque Rápido", descricao: "Taxa de Tiro (Cadência)", atributo: "CADENCIA_MOD", custo: CUSTO_MELHORIA },
+    { nome: "Motor Potente", descricao: "Velocidade do Pato", atributo: "PATO_VELOCIDADE_MOD", custo: CUSTO_MELHORIA },
+    { nome: "Semente Forte", descricao: "Velocidade do Projétil", atributo: "BALA_VELOCIDADE_MOD", custo: CUSTO_MELHORIA }
+];
+
+// ESTADO DO JOGO - Variáveis Mutáveis 
 let pato_velocidade = CONFIG.PATO_VELOCIDADE_BASE; 
 const pato_tamanho = 100; 
 let balas_velocidade = CONFIG.BALAS_VELOCIDADE_BASE; 
@@ -151,6 +163,59 @@ function resetGame() {
     // Não chamamos requestAnimationFrame aqui, o gameLoop cuidará disso
 }
 
+// ADICIONADO: Função para Aplicar as Melhorias
+function aplicarMelhoria(atributoMelhoria, custo) { // (em vez de applyUpgrade)
+    if (peixesDeOuro >= custo) {
+        peixesDeOuro -= custo;
+        
+        // Aplica a melhoria no atributo mutável (let)
+        if (atributoMelhoria === "CADENCIA_MOD") {
+            // Aumentar a cadência significa DIMINUIR o tempo (fire_rate)
+            fire_rate = Math.max(50, fire_rate - 20); 
+            
+        } else if (atributoMelhoria === "PATO_VELOCIDADE_MOD") {
+            pato_velocidade += 0.5;
+            
+        } else if (atributoMelhoria === "BALA_VELOCIDADE_MOD") {
+            balas_velocidade += 1.0;
+        }
+        
+        // Sai do menu e volta ao jogo
+        estaEmMelhoria = false; // (em vez de isUpgrading)
+    } 
+}
+
+// Função para Desenhar o Menu de Melhoria
+function desenharMenuMelhoria() { 
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = 'yellow';
+    ctx.font = '36px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Nível Atingido! Escolha Sua Melhoria', canvas.width / 2, 100);
+
+    ctx.font = '24px Arial';
+    ctx.fillText(`Ouro Atual: ${peixesDeOuro}`, canvas.width / 2, 150);
+
+    ctx.textAlign = 'left';
+    let inicioY = 250; 
+    
+    OPCOES_MELHORIA.forEach((opcao, indice) => { 
+        ctx.fillStyle = (peixesDeOuro >= opcao.custo) ? 'lime' : 'red'; 
+        
+        ctx.font = '22px Arial';
+        ctx.fillText(`[${indice + 1}] ${opcao.nome}`, 150, inicioY + indice * 60);
+        
+        ctx.font = '16px Arial';
+        ctx.fillText(`Custo: ${opcao.custo} Ouro. Melhora: ${opcao.descricao}`, 150, inicioY + 25 + indice * 60);
+    });
+    
+    ctx.fillStyle = 'white';
+    ctx.font = '18px Arial';
+    ctx.fillText('Pressione o número correspondente para selecionar.', 150, canvas.height - 50);
+}
+
 // LÓGICA PRINCIPAL
 function update() {
     let dx = 0;
@@ -249,11 +314,19 @@ function update() {
                     inimigo.splice(i, 1);
                     peixesDeOuro += 1;
                     score += 10;
+                    
+                    // Lógica do Gatilho de Melhoria
+                    inimigosDerrotadosDesdeMelhoria++;
+                    if (inimigosDerrotadosDesdeMelhoria >= LIMIAR_MELHORIA) {
+                        inimigosDerrotadosDesdeMelhoria = 0; 
+                        estaEmMelhoria = true; // PAUSA O JOGO
+                    }
+                    
                     break; 
                 }
             }
         }
-        
+
         // Colisão (Inimigo vs. Pato)
         if (checkCollision(caranguejo, {x: pato.x, y: pato.y, size: pato_tamanho})) {
             
@@ -288,6 +361,17 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft') keys.left = true; 
     if (e.key === 'ArrowDown') keys.down = true; 
     if (e.key === 'ArrowRight') keys.right = true; 
+
+    // Lógica de Seleção de Melhoria
+    if (estaEmMelhoria) { // Verifica se o jogo está em pausa
+        const indiceSelecionado = parseInt(e.key) - 1; 
+        
+        if (indiceSelecionado >= 0 && indiceSelecionado < OPCOES_MELHORIA.length) {
+            const opcaoSelecionada = OPCOES_MELHORIA[indiceSelecionado];
+            aplicarMelhoria(opcaoSelecionada.atributo, opcaoSelecionada.custo);
+        }
+        return; 
+    }
 });
 
 document.addEventListener('keyup', (e) => {
@@ -379,11 +463,15 @@ function draw() {
 function gameLoop() {
     if (isGameOver) { 
         drawGameOverScreen(); 
-    } else if (patoLoaded && bgLoaded) { // Só roda se as imagens estiverem carregadas
+    } else if (estaEmMelhoria) { // ADICIONADO: Estado de Pausa/Melhoria
+        // Se estiver melhorando, desenha o cenário estático e o menu por cima.
+        draw(); 
+        desenharMenuMelhoria(); 
+    } else if (patoLoaded && bgLoaded) { // Estado normal de Jogo Rodando
         update();
         draw();
     } else {
-        // Opcional: Desenhar tela de "Carregando"
+        // Estado de Carregamento de Assets
         ctx.fillStyle = 'black';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = 'white';
