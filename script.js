@@ -8,11 +8,11 @@ const CONFIG = {
     PATO_VELOCIDADE_BASE: 3.5,
     BALAS_VELOCIDADE_BASE: 7,
     FIRE_RATE_BASE: 200,
-    INIMIGO_VELOCIDADE: 1.5,
+    INIMIGO_VELOCIDADE: 1.2,
 };
 
-// --- NOVAS CONSTANTES DE INIMIGOS (TEMPLATES) ---
-const INIMIGO_TAMANHO_BASE = 40;
+// --- NOVAS CONSTANTES DE INIMIGOS (TEMPLATES) COM REFERÊNCIA A SPRITES ---
+const INIMIGO_TAMANHO_BASE = 65;
 const INIMIGO_VELOCIDADE_BASE = CONFIG.INIMIGO_VELOCIDADE;
 const INIMIGO_VIDA_BASE = 4; 
 
@@ -27,18 +27,20 @@ const TIPOS_INIMIGOS = {
         pontuacao: 1, 
         scoreValue: 10, 
         spawnChance: 90,
-        cor: '#8b4513' 
+        cor: '#8b4513',
+        sprite: 'caranguejo', // Chave única para o Caranguejo
     },
-    // Caranguejo Tanque (Roxo)
+    // Polvo Tanque 
     TANQUE: {
         tipo: 'tanque',
-        tamanho: INIMIGO_TAMANHO_BASE * 2,
-        velocidade: INIMIGO_VELOCIDADE_BASE / 2,
-        vidaMaxima: INIMIGO_VIDA_BASE * 4, // 9 hits
+        tamanho: INIMIGO_TAMANHO_BASE * 2.4,
+        velocidade: INIMIGO_VELOCIDADE_BASE / 2.2,
+        vidaMaxima: INIMIGO_VIDA_BASE * 4.3,
         pontuacao: 5, 
         scoreValue: 50,
         spawnChance: 10,
-        cor: '#4b0082' // Roxo Escuro
+        cor: '#4b0082',
+        sprite: 'polvo', // Chave única para o Polvo
     }
 };
 
@@ -61,14 +63,14 @@ const OPCOES_MELHORIA = [
 
 // ESTADO DO JOGO - Variáveis Mutáveis 
 let pato_velocidade = CONFIG.PATO_VELOCIDADE_BASE; 
-const pato_tamanho = 100; 
+const pato_tamanho = 80; 
 let balas_velocidade = CONFIG.BALAS_VELOCIDADE_BASE; 
 let fire_rate = CONFIG.FIRE_RATE_BASE; 
 
 // Variáveis de dificuldade
 let spawn_rate_base = 2000;
-let spawn_rate = 2000; // Será reduzido a cada upgrade de cadência
-let tanque_chance_mod = 0; // Será aumentado a cada upgrade
+let spawn_rate = 2000; 
+let tanque_chance_mod = 0; 
 let lastSpawnTime = 0;
 
 
@@ -77,7 +79,13 @@ let pato = {
     x: canvas.width / 2 - pato_tamanho / 2,
     y: canvas.height / 2 - pato_tamanho / 2,
     vida: 5,
+    orientacao: 'down',
+    estaMachucado: false, 
+    tempoInvencibilidade: 0, 
 };
+
+const TEMPO_PISCAR = 500;
+const INTERVALO_PISCAR = 50;
 
 // Objeto Inimigos (Array)
 let inimigos = []; 
@@ -88,10 +96,69 @@ let isGameOver = false;
 let peixesDeOuro = 0; 
 let score = 0;
 
-// Objeto Background
-let background = {
-    x: 0, y: 0, width: canvas.width, height: canvas.height + 50
+// --- Carregamento de Assets ---
+
+// Coração
+let heartImg = new Image();
+heartImg.src = "assets/heart.png";
+let heartLoaded = false;
+heartImg.onload = () => { heartLoaded = true; };
+
+// Background
+let bgImg = new Image();
+bgImg.src = "assets/cenario.png"; 
+let bgLoaded = false;
+bgImg.onload = () => { bgLoaded = true; };
+
+// Pato
+let spritesPato = {
+    'up': new Image(), 'down': new Image(), 'left': new Image(), 'right': new Image(),
 };
+
+spritesPato.up.src = "assets/pato_up.png"; 
+spritesPato.down.src = "assets/pato_down.png"; 
+spritesPato.left.src = "assets/pato_left.png";
+spritesPato.right.src = "assets/pato_right.png";
+
+let patoLoaded = false;
+let loadedCount = 0;
+const totalSprites = Object.keys(spritesPato).length;
+
+for (const key in spritesPato) {
+    spritesPato[key].onload = () => {
+        loadedCount++;
+        if (loadedCount === totalSprites) {
+            patoLoaded = true;
+        }
+    };
+}
+
+// NOVO: Carregamento dos Sprites dos Inimigos (Caranguejo e Polvo)
+let spritesInimigo = {};
+let inimigoSpritesLoaded = false;
+
+// CORRIGIDO: Tipos e Direções com base nos nomes dos arquivos fornecidos
+const inimigoTypes = ['caranguejo', 'polvo'];
+const inimigoDirections = ['left', 'right'];
+let loadedInimigoCount = 0;
+const totalInimigoSprites = inimigoTypes.length * inimigoDirections.length;
+
+for (const type of inimigoTypes) {
+    spritesInimigo[type] = {};
+    for (const direction of inimigoDirections) {
+        const img = new Image();
+        // CORRIGIDO: Usa o nome do arquivo, ex: assets/polvo_right.png
+        img.src = `assets/${type}_${direction}.png`; 
+        img.onload = () => {
+            loadedInimigoCount++;
+            if (loadedInimigoCount === totalInimigoSprites) {
+                inimigoSpritesLoaded = true;
+            }
+        };
+        spritesInimigo[type][direction] = img;
+    }
+}
+
 
 // Objeto para rastrear teclas pressionadas
 let keys = {
@@ -103,18 +170,6 @@ let keys = {
 let balas = []; 
 const balas_tamanho = 5; 
 let lastFireTime = 0;
-
-// Carregamento do sprite do pato 
-let patoImg = new Image();
-patoImg.src = "assets/pato_atirador_2.png";
-let patoLoaded = false;
-patoImg.onload = () => { patoLoaded = true; };
-
-// 2. Cenário
-let bgImg = new Image();
-bgImg.src = "assets/cenario.png"; 
-let bgLoaded = false;
-bgImg.onload = () => { bgLoaded = true; };
 
 // FUNÇÃO DE DETECÇÃO DE COLISÃO (Box-to-Box)
 function checkCollision(objA, objB) {
@@ -140,11 +195,10 @@ function criaBala(dirX, dirY) {
     balas.push(bala);
 }
 
-// Função auxiliar para selecionar o template do inimigo (AGORA DINÂMICA)
+// Função auxiliar para selecionar o template do inimigo
 function selecionaTipoInimigo() {
     const rand = Math.random() * 100;
     
-    // Calcula a chance real do Tanque (base 10% + modificador, limitando a 70%)
     let chanceTanqueAtual = TIPOS_INIMIGOS.TANQUE.spawnChance + tanque_chance_mod;
     chanceTanqueAtual = Math.min(chanceTanqueAtual, 70); 
     
@@ -182,6 +236,8 @@ function criaInimigo() {
         pontuacao: template.pontuacao,
         scoreValue: template.scoreValue,
         cor: template.cor,
+        orientacao: 'right', // NOVO: Orientação inicial
+        spriteKey: template.sprite // NOVO: Chave para buscar o sprite (ex: 'caranguejo' ou 'polvo')
     };
 
     inimigos.push(novoInimigo);
@@ -207,7 +263,10 @@ function resetGame() {
     balas_velocidade = CONFIG.BALAS_VELOCIDADE_BASE;
     spawn_rate = spawn_rate_base; // RESET DE SPAWN RATE
     tanque_chance_mod = 0; // RESET DE CHANCE DO TANQUE
-
+    pato.orientacao = 'down'; // RESET DE ORIENTAÇÃO
+    pato.estaMachucado = false; 
+    pato.tempoInvencibilidade = 0;
+    
     inimigos = []; 
     balas = [];
     
@@ -285,6 +344,7 @@ function desenharMenuMelhoria() {
 function update() {
     let dx = 0;
     let dy = 0;
+    const currentTime = Date.now();
 
     // 1. Lógica de Movimento do Pato (WASD)
     if (keys.w) dy -= 1;
@@ -315,15 +375,25 @@ function update() {
 
     let fireLength = Math.sqrt(fireDx * fireDx + fireDy * fireDy); 
     
-    const currentTime = Date.now();
-    if (fireLength !== 0 && currentTime > lastFireTime + fire_rate) {
+    // Atualiza a Orientação se uma Seta estiver Pressionada
+    if (fireLength !== 0) {
+        if (Math.abs(fireDx) > Math.abs(fireDy)) {
+            pato.orientacao = (fireDx > 0) ? 'right' : 'left';
+        } else {
+            pato.orientacao = (fireDy > 0) ? 'down' : 'up';
+        }
         
-        fireDx /= fireLength;
-        fireDy /= fireLength;
-        
-        criaBala(fireDx, fireDy);
-        lastFireTime = currentTime;
+        // Lógica de tiro
+        if (currentTime > lastFireTime + fire_rate) {
+            
+            fireDx /= fireLength;
+            fireDy /= fireLength;
+            
+            criaBala(fireDx, fireDy);
+            lastFireTime = currentTime;
+        }
     }
+
 
     // 3. Lógica de Movimento e Limpeza das Balas
     for (let i = balas.length - 1; i >= 0; i--) {
@@ -342,7 +412,7 @@ function update() {
         }
     }
 
-    // 4. Lógica de Spawn de Inimigos (Timer) - USANDO spawn_rate MUTÁVEL
+    // 4. Lógica de Spawn de Inimigos (Timer)
     if (currentTime > lastSpawnTime + spawn_rate) {
         criaInimigo();
         lastSpawnTime = currentTime;
@@ -356,6 +426,13 @@ function update() {
         let dx_inimigo = pato.x - inimigoObj.x;
         let dy_inimigo = pato.y - inimigoObj.y;
         
+        // NOVO: Atualiza a orientação do sprite do inimigo
+        if (dx_inimigo > 0) {
+            inimigoObj.orientacao = 'right';
+        } else if (dx_inimigo < 0) {
+            inimigoObj.orientacao = 'left';
+        }
+
         let magnitude = Math.sqrt(dx_inimigo * dx_inimigo + dy_inimigo * dy_inimigo);
 
         if (magnitude > 0) {
@@ -396,7 +473,16 @@ function update() {
         // Colisão (Inimigo vs. Pato)
         if (checkCollision(inimigoObj, {x: pato.x, y: pato.y, size: pato_tamanho})) {
             
-            pato.vida -= 1;
+            // Verifica se o pato JÁ está machucado/invencível
+            if (!pato.estaMachucado) {
+                pato.vida -= 1;
+                
+                // Ativa o estado de machucado/invencibilidade
+                pato.estaMachucado = true;
+                pato.tempoInvencibilidade = currentTime + TEMPO_PISCAR;
+            }
+
+            // Remove o inimigo sempre que a colisão acontecer
             inimigos.splice(i, 1); 
 
             if (pato.vida <= 0) {
@@ -405,14 +491,39 @@ function update() {
             }
         }
     }
+    
+    // NOVO: Lógica para desativar o estado machucado e gerenciar o tempo
+    if (pato.estaMachucado && currentTime > pato.tempoInvencibilidade) {
+        pato.estaMachucado = false;
+    }
 }
 
 // CONTROLE DE ENTRADA (Listeners)
 document.addEventListener('keydown', (e) => {
+    // PADRONIZA A CHAVE (Key) PARA MINÚSCULAS para facilitar a comparação
     const key = e.key.toLowerCase();
     
+    // -----------------------------------------------------------
+    // TRATAMENTO PRIORITÁRIO DO MENU DE MELHORIA
+    // -----------------------------------------------------------
+    if (estaEmMelhoria) {
+        // e.key retorna '1', '2', '3', etc. (parseInt funciona)
+        const indiceSelecionado = parseInt(e.key) - 1; 
+        
+        if (indiceSelecionado >= 0 && indiceSelecionado < OPCOES_MELHORIA.length) {
+            const opcaoSelecionada = OPCOES_MELHORIA[indiceSelecionado];
+            
+            // Tenta aplicar a melhoria
+            aplicarMelhoria(opcaoSelecionada.atributo, opcaoSelecionada.custo);
+        }
+        // Enquanto estiver em melhoria, consuma o evento
+        return; 
+    }
+    // -----------------------------------------------------------
+
+
     // Controle de Reinício
-    if (isGameOver && e.key === ' ') { 
+    if (isGameOver && key === ' ') { // Use 'key' (espaço em minúsculo é ' ')
         resetGame();
     }
 
@@ -422,76 +533,101 @@ document.addEventListener('keydown', (e) => {
     if (key === 's') keys.s = true;
     if (key === 'd') keys.d = true;
 
-    // Tiro
-    if (e.key === 'ArrowUp') keys.up = true;
-    if (e.key === 'ArrowLeft') keys.left = true; 
-    if (e.key === 'ArrowDown') keys.down = true; 
-    if (e.key === 'ArrowRight') keys.right = true; 
-
-    // Lógica de Seleção de Melhoria
-    if (estaEmMelhoria) { 
-        const indiceSelecionado = parseInt(e.key) - 1; 
-        
-        if (indiceSelecionado >= 0 && indiceSelecionado < OPCOES_MELHORIA.length) {
-            const opcaoSelecionada = OPCOES_MELHORIA[indiceSelecionado];
-            aplicarMelhoria(opcaoSelecionada.atributo, opcaoSelecionada.custo);
-        }
-        return; 
-    }
+    // Tiro (AGORA USANDO 'key' E OS NOMES MINÚSCULOS)
+    if (key === 'arrowup') keys.up = true;
+    if (key === 'arrowleft') keys.left = true; 
+    if (key === 'arrowdown') keys.down = true; 
+    if (key === 'arrowright') keys.right = true; 
 });
 
+// E, para garantir, o keyup também deve usar a mesma padronização:
 document.addEventListener('keyup', (e) => {
     const key = e.key.toLowerCase();
+    
     // Movimento 
     if (key === 'w') keys.w = false;
     if (key === 'a') keys.a = false;
     if (key === 's') keys.s = false;
     if (key === 'd') keys.d = false;
 
-    // Tiro
-    if (e.key === 'ArrowUp') keys.up = false; 
-    if (e.key === 'ArrowLeft') keys.left = false; 
-    if (e.key === 'ArrowDown') keys.down = false; 
-    if (e.key === 'ArrowRight') keys.right = false; 
+    // Tiro (AGORA USANDO 'key' E OS NOMES MINÚSCULOS)
+    if (key === 'arrowup') keys.up = false; 
+    if (key === 'arrowleft') keys.left = false; 
+    if (key === 'arrowdown') keys.down = false; 
+    if (key === 'arrowright') keys.right = false; 
+});
+
+document.addEventListener('keyup', (e) => {
+    const key = e.key.toLowerCase();
+    // Movimento 
+    if (key === 'w') keys.w = false;
+    if (key === 'a') keys.a = false;
+    if (key === 's') keys.s = false;
+    if (key === 'd') keys.d = false;
+
+    // Tiro
+    if (e.key === 'ArrowUp') keys.up = false; 
+    if (e.key === 'ArrowLeft') keys.left = false; 
+    if (e.key === 'ArrowDown') keys.down = false; 
+    if (e.key === 'ArrowRight') keys.right = false; 
 });
 
 
 // Função Tela Game Over
 function drawGameOverScreen() {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.fillStyle = 'white';
-    ctx.font = '48px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('QUACKNADO: FIM DE JOGO', canvas.width / 2, canvas.height / 2);
-    
-    ctx.font = '20px Arial';
-    ctx.fillText(`Score Final: ${score}`, canvas.width / 2, canvas.height / 2 + 50);
-    ctx.fillText('Pressione ESPAÇO para Recomeçar', canvas.width / 2, canvas.height / 2 + 80);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = 'white';
+    ctx.font = '48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('QUACKNADO: FIM DE JOGO', canvas.width / 2, canvas.height / 2);
+    
+    ctx.font = '20px Arial';
+    ctx.fillText(`Score Final: ${score}`, canvas.width / 2, canvas.height / 2 + 50);
+    ctx.fillText('Pressione ESPAÇO para Recomeçar', canvas.width / 2, canvas.height / 2 + 80);
 }
 
 // Função para Desenhar o HUD 
 function drawHUD() {
-    ctx.fillStyle = 'white';
-    ctx.font = '20px Arial';
-    ctx.textAlign = 'left';
-    
-    ctx.fillText(`Vida: ${pato.vida}`, 10, 25); 
-    ctx.fillText(`Ouro: ${peixesDeOuro}`, 10, 50);
-    
-    // HUD DE DEBUG
-    ctx.fillStyle = 'yellow';
-    ctx.font = '16px Arial';
-    const chanceTanqueAtual = Math.min(TIPOS_INIMIGOS.TANQUE.spawnChance + tanque_chance_mod, 70);
+    ctx.fillStyle = 'white';
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'left';
+    
+    // --- Lógica de Desenho dos Corações ---
+    const HEART_SIZE = 30;
+    const START_X = 10;
+    const START_Y = 10; // Começando mais perto do topo
+    const SPACING = 5;
 
-    ctx.fillText(`Spawn Rate: ${spawn_rate.toFixed(0)} ms`, 10, 80);
-    ctx.fillText(`Chance Tanque: ${chanceTanqueAtual.toFixed(0)} %`, 10, 100);
-    
-    ctx.textAlign = 'right';
-    ctx.fillStyle = 'white';
-    ctx.font = '20px Arial';
-    ctx.fillText(`Score: ${score}`, canvas.width - 10, 25);
+    if (heartLoaded) {
+        for (let i = 0; i < pato.vida; i++) {
+            const x = START_X + i * (HEART_SIZE + SPACING);
+            // Desenha a imagem do coração para cada ponto de vida
+            ctx.drawImage(heartImg, x, START_Y, HEART_SIZE, HEART_SIZE);
+        }
+        // Movendo o Ouro para baixo para evitar sobreposição com os corações
+        ctx.fillText(`Ouro: ${peixesDeOuro}`, 10, START_Y + HEART_SIZE + 10); // Posiciona abaixo dos corações
+    } else {
+        // Fallback: Desenha o texto se a imagem do coração não carregar
+        ctx.fillText(`Vida: ${pato.vida}`, 10, 40); 
+        ctx.fillText(`Ouro: ${peixesDeOuro}`, 10, 65);
+    }
+    // ----------------------------------------
+    
+    
+    // HUD DE DEBUG
+    ctx.fillStyle = 'yellow';
+    ctx.font = '16px Arial';
+    const chanceTanqueAtual = Math.min(TIPOS_INIMIGOS.TANQUE.spawnChance + tanque_chance_mod, 70);
+
+    ctx.fillText(`Spawn Rate: ${spawn_rate.toFixed(0)} ms`, 10, 85);
+    ctx.fillText(`Chance Tanque: ${chanceTanqueAtual.toFixed(0)} %`, 10, 105);
+    
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'white';
+    ctx.font = '20px Arial';
+    ctx.fillText(`Score: ${score}`, canvas.width - 10, 25);
 }
 
 // RENDERIZAÇÃO
@@ -500,73 +636,110 @@ function draw() {
 
     // Desenha Background
     if (bgLoaded) {
-        ctx.drawImage(bgImg, 0, 0, background.width, background.height);
+        // CORRIGIDO: Usa canvas.width e canvas.height no lugar de background.width/height
+        ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height + 51); 
     }
 
-    // Desenha o Pato
-    if (patoLoaded) {
-        ctx.drawImage(patoImg, pato.x, pato.y, pato_tamanho, pato_tamanho);
-    } else {
-        ctx.fillStyle = '#ef4444'; 
-        ctx.fillRect(pato.x, pato.y, pato_tamanho, pato_tamanho);
-    }
-    
-    // Desenha os Projéteis (Grãos de Semente)
-    ctx.fillStyle = '#fef3c7'; 
-    balas.forEach(bala => {
-        ctx.beginPath();
-        ctx.arc(bala.x + bala.size / 2, bala.y + bala.size / 2, bala.size / 2, 0, Math.PI * 2); 
-        ctx.fill();
-        ctx.closePath();
-    });
+    // Desenha o Pato (Lógica de Piscar)
+    if (patoLoaded) {
+        let deveDesenhar = true;
+    
+        // Lógica do piscar
+        if (pato.estaMachucado) {
+            if ((Date.now() % (2 * INTERVALO_PISCAR)) < INTERVALO_PISCAR) {
+                deveDesenhar = false; 
+            }
+        }
+        
+        if (deveDesenhar) {
+            const spriteAtual = spritesPato[pato.orientacao] || spritesPato.down; 
+            ctx.drawImage(spriteAtual, pato.x, pato.y, pato_tamanho, pato_tamanho);
+        }
+        
+    } else {
+        // Fallback: Quadrado vermelho 
+        ctx.fillStyle = '#ef4444'; 
+        ctx.fillRect(pato.x, pato.y, pato_tamanho, pato_tamanho);
+    }
 
-    // Desenha os Inimigos
-    inimigos.forEach(inimigoObj => { 
-        ctx.fillStyle = inimigoObj.cor; 
-        ctx.fillRect(inimigoObj.x, inimigoObj.y, inimigoObj.size, inimigoObj.size);
-        
-        // Desenha barra de vida
-        if (inimigoObj.vidaMaxima > 1) { 
-            const healthBarWidth = inimigoObj.size * (inimigoObj.vida / inimigoObj.vidaMaxima); 
-            const maxBarWidth = inimigoObj.size;
+    // Desenha os Projéteis (Grãos de Semente)
+    ctx.fillStyle = '#fef3c7'; 
+    balas.forEach(bala => {
+        ctx.beginPath();
+        ctx.arc(bala.x + bala.size / 2, bala.y + bala.size / 2, bala.size / 2, 0, Math.PI * 2); 
+        ctx.fill();
+        ctx.closePath();
+    });
 
-            // Fundo da barra (preto)
-            ctx.fillStyle = 'black';
-            ctx.fillRect(inimigoObj.x, inimigoObj.y - 10, maxBarWidth, 5); 
+    // Desenha os Inimigos
+    inimigos.forEach(inimigoObj => { 
+        
+        // NOVO: Tenta desenhar o sprite
+        if (inimigoSpritesLoaded) {
+            const spriteKey = inimigoObj.spriteKey; // Ex: 'caranguejo' ou 'polvo'
+            const orientacao = inimigoObj.orientacao; // 'left' ou 'right'
+            
+            // Busca a imagem correta no mapa
+            const spriteAtual = spritesInimigo[spriteKey][orientacao];
+            
+            if (spriteAtual) {
+                ctx.drawImage(spriteAtual, inimigoObj.x, inimigoObj.y, inimigoObj.size, inimigoObj.size);
+            } else {
+                // Fallback: Desenha o quadrado colorido se o sprite não for encontrado
+                ctx.fillStyle = inimigoObj.cor; 
+                ctx.fillRect(inimigoObj.x, inimigoObj.y, inimigoObj.size, inimigoObj.size);
+            }
+        } else {
+            // Fallback: Desenha o quadrado colorido enquanto carrega
+            ctx.fillStyle = inimigoObj.cor; 
+            ctx.fillRect(inimigoObj.x, inimigoObj.y, inimigoObj.size, inimigoObj.size);
+        }
+        
+        // Desenha barra de vida
+        if (inimigoObj.vidaMaxima > 1) { 
+            const healthBarWidth = inimigoObj.size * (inimigoObj.vida / inimigoObj.vidaMaxima); 
+            const maxBarWidth = inimigoObj.size;
 
-            // Vida atual (verde)
-            ctx.fillStyle = 'lime';
-            ctx.fillRect(inimigoObj.x, inimigoObj.y - 10, healthBarWidth, 5); 
-        }
-    });
-    
-    // Desenha o HUD
-    drawHUD();
+            // Fundo da barra (preto)
+            ctx.fillStyle = 'black';
+            ctx.fillRect(inimigoObj.x, inimigoObj.y - 10, maxBarWidth, 5); 
+
+            // Vida atual (verde)
+            ctx.fillStyle = 'lime';
+            ctx.fillRect(inimigoObj.x, inimigoObj.y - 10, healthBarWidth, 5); 
+        }
+    });
+    
+    // Desenha o HUD
+    drawHUD();
 }
 
 // GAME LOOP
 function gameLoop() {
-    if (isGameOver) { 
-        drawGameOverScreen(); 
-    } else if (estaEmMelhoria) { 
-        draw(); 
-        desenharMenuMelhoria(); 
-    } else if (patoLoaded && bgLoaded) { 
-        update();
-        draw();
-    } else {
-        // Estado de Carregamento de Assets
-        ctx.fillStyle = 'black';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = 'white';
-        ctx.font = '30px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('Carregando...', canvas.width / 2, canvas.height / 2);
-    }
-    requestAnimationFrame(gameLoop);
+    if (isGameOver) { 
+        drawGameOverScreen(); 
+    } else if (estaEmMelhoria) { 
+        // Se estiver em melhoria, desenha o cenário estático e o menu por cima.
+        draw(); 
+        desenharMenuMelhoria(); 
+    } 
+    // MODIFICADO: Espera que TODOS os assets (pato, background, coração, inimigos) carreguem
+    else if (patoLoaded && bgLoaded && heartLoaded && inimigoSpritesLoaded) { 
+        update();
+        draw();
+    } else {
+        // Estado de Carregamento de Assets
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white';
+        ctx.font = '30px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Carregando...', canvas.width / 2, canvas.height / 2);
+    }
+    requestAnimationFrame(gameLoop);
 }
 
 // Inicia o loop
 window.onload = () => {
-    requestAnimationFrame(gameLoop);
+    requestAnimationFrame(gameLoop);
 };
