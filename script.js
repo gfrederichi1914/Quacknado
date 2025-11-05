@@ -8,13 +8,13 @@ const CONFIG = {
     PATO_VELOCIDADE_BASE: 3.5,
     BALAS_VELOCIDADE_BASE: 7,
     FIRE_RATE_BASE: 200,
-    INIMIGO_VELOCIDADE: 1.2,
+    INIMIGO_VELOCIDADE: 1,
 };
 
 // --- NOVAS CONSTANTES DE INIMIGOS (TEMPLATES) COM REFERÊNCIA A SPRITES ---
-const INIMIGO_TAMANHO_BASE = 65;
+const INIMIGO_TAMANHO_BASE = 80;
 const INIMIGO_VELOCIDADE_BASE = CONFIG.INIMIGO_VELOCIDADE;
-const INIMIGO_VIDA_BASE = 4; 
+const INIMIGO_VIDA_BASE = 5; 
 
 // Mapeamento de Tipos de Inimigos (Templates)
 const TIPOS_INIMIGOS = {
@@ -33,9 +33,9 @@ const TIPOS_INIMIGOS = {
     // Polvo Tanque 
     TANQUE: {
         tipo: 'tanque',
-        tamanho: INIMIGO_TAMANHO_BASE * 2.4,
+        tamanho: INIMIGO_TAMANHO_BASE * 2.2,
         velocidade: INIMIGO_VELOCIDADE_BASE / 2.2,
-        vidaMaxima: INIMIGO_VIDA_BASE * 4.3,
+        vidaMaxima: INIMIGO_VIDA_BASE * 3.9,
         pontuacao: 5, 
         scoreValue: 50,
         spawnChance: 10,
@@ -590,44 +590,46 @@ function drawGameOverScreen() {
 
 // Função para Desenhar o HUD 
 function drawHUD() {
-    ctx.fillStyle = 'white';
-    ctx.font = '20px Arial';
-    ctx.textAlign = 'left';
-    
-    // --- Lógica de Desenho dos Corações ---
-    const HEART_SIZE = 30;
-    const START_X = 10;
-    const START_Y = 10; // Começando mais perto do topo
-    const SPACING = 5;
+    // PADRÃO: Fonte Padrão para itens não-pixel
+    ctx.fillStyle = 'white';
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'left';
+    
+    // --- Lógica de Desenho dos Corações ---
+    const HEART_SIZE = 30;
+    const START_X = 10;
+    const START_Y = 10;
+    const SPACING = 5;
 
-    if (heartLoaded) {
-        for (let i = 0; i < pato.vida; i++) {
-            const x = START_X + i * (HEART_SIZE + SPACING);
-            // Desenha a imagem do coração para cada ponto de vida
-            ctx.drawImage(heartImg, x, START_Y, HEART_SIZE, HEART_SIZE);
-        }
-        // Movendo o Ouro para baixo para evitar sobreposição com os corações
-        ctx.fillText(`Ouro: ${peixesDeOuro}`, 10, START_Y + HEART_SIZE + 10); // Posiciona abaixo dos corações
-    } else {
-        // Fallback: Desenha o texto se a imagem do coração não carregar
-        ctx.fillText(`Vida: ${pato.vida}`, 10, 40); 
-        ctx.fillText(`Ouro: ${peixesDeOuro}`, 10, 65);
-    }
-    // ----------------------------------------
-    
-    
-    // HUD DE DEBUG
-    ctx.fillStyle = 'yellow';
-    ctx.font = '16px Arial';
-    const chanceTanqueAtual = Math.min(TIPOS_INIMIGOS.TANQUE.spawnChance + tanque_chance_mod, 70);
+    if (heartLoaded) {
+        for (let i = 0; i < pato.vida; i++) {
+            const x = START_X + i * (HEART_SIZE + SPACING);
+            ctx.drawImage(heartImg, x, START_Y, HEART_SIZE, HEART_SIZE);
+        }
+        
+        // MODIFICADO: Aplica a fonte pixel para o Ouro e o Score
+        ctx.font = '40px Pixel'; // Usando 'Pixel' e um tamanho maior para destaque
+        
+        // POSICIONAMENTO DO OURO: Abaixado um pouco (agora 10px abaixo dos corações)
+        ctx.fillText(`Ouro: ${peixesDeOuro}`, 15, START_Y + HEART_SIZE + 30); 
 
-    ctx.fillText(`Spawn Rate: ${spawn_rate.toFixed(0)} ms`, 10, 85);
-    ctx.fillText(`Chance Tanque: ${chanceTanqueAtual.toFixed(0)} %`, 10, 105);
-    
-    ctx.textAlign = 'right';
-    ctx.fillStyle = 'white';
-    ctx.font = '20px Arial';
-    ctx.fillText(`Score: ${score}`, canvas.width - 10, 25);
+    } else {
+        // Fallback (se o coração não carregar)
+        ctx.fillText(`Vida: ${pato.vida}`, 10, 40); 
+        ctx.fillText(`Ouro: ${peixesDeOuro}`, 10, 65);
+    }
+    // ----------------------------------------
+    
+    
+    // REMOVIDO: HUD DE DEBUG (Spawn Rate e Chance Tanque)
+    // As linhas do HUD de DEBUG foram excluídas, pois você quer removê-las.
+    
+    
+    // SCORE (NOVA FONTE)
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'white';
+    ctx.font = '40px Pixel'; // Aplicando a fonte pixel
+    ctx.fillText(`Score: ${score}`, canvas.width - 15, 40);
 }
 
 // RENDERIZAÇÃO
