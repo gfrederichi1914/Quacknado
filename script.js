@@ -137,6 +137,18 @@ for (const key in spritesPato) {
 let spritesInimigo = {};
 let inimigoSpritesLoaded = false;
 
+// NOVO: Imagem da Tela de Game Over
+let gameOverImg = new Image();
+gameOverImg.src = "assets/game_over.png";
+let gameOverLoaded = false;
+gameOverImg.onload = () => { gameOverLoaded = true; };
+
+// NOVO: Imagem da Tela de Upgrade
+let upgradeMenuImg = new Image();
+upgradeMenuImg.src = "assets/upgrade_menu.png";
+let upgradeMenuLoaded = false;
+upgradeMenuImg.onload = () => { upgradeMenuLoaded = true; };
+
 // CORRIGIDO: Tipos e Direções com base nos nomes dos arquivos fornecidos
 const inimigoTypes = ['caranguejo', 'polvo'];
 const inimigoDirections = ['left', 'right'];
@@ -300,44 +312,36 @@ function aplicarMelhoria(atributoMelhoria, custo) {
     } 
 }
 
-// Função para Desenhar o Menu de Melhoria
+// Função para Desenhar o Menu de Melhoria - USANDO IMAGEM
+// Função para Desenhar o Menu de Melhoria - COM FUNDO E FONTE PIXEL
 function desenharMenuMelhoria() { 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // NOVO: 1. Desenha o FUNDO PRETO SEMI-TRANSPARENTE (Prioritário)
+    // Isso garante que todo o jogo fique escuro, independentemente da imagem de fundo do menu.
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // 0.7 de opacidade
+    ctx.fillRect(0, 0, canvas.width, canvas.height); 
 
-    ctx.fillStyle = 'yellow';
-    ctx.font = '36px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('Nível Atingido! Escolha Sua Melhoria', canvas.width / 2, 100);
+    // 2. Desenha a IMAGEM DE FUNDO (por cima do fundo preto)
+    if (upgradeMenuLoaded) {
+        // Desenha a imagem ocupando todo o canvas (800x600)
+        ctx.drawImage(upgradeMenuImg, 0, 0, canvas.width, canvas.height);
+    } 
+    // Nota: O fallback (fundo preto) não é mais necessário aqui, pois já desenhamos ele na linha 4.
 
-    ctx.font = '24px Arial';
-    ctx.fillText(`Ouro Atual: ${peixesDeOuro}`, canvas.width / 2, 150);
+    // --- COORDENADAS PARA POSICIONAMENTO DO TEXTO ---
+    const TEXT_START_Y = 150; 
+    const OPTIONS_START_Y = 250;
+    
+
+    // 4. Ouro Atual (MODIFICADO: Fonte Pixelada)
+    ctx.fillStyle = 'white';
+    ctx.font = '35px Pixel'; // Aplicando a fonte pixelada!
+    ctx.fillText(`Ouro Atual: ${peixesDeOuro}`, canvas.width - 100, TEXT_START_Y + 50);
 
     ctx.textAlign = 'left';
-    let inicioY = 250; 
+    let inicioY = OPTIONS_START_Y; 
     
-    OPCOES_MELHORIA.forEach((opcao, indice) => { 
-        ctx.fillStyle = (peixesDeOuro >= opcao.custo) ? 'lime' : 'red'; 
-        
-        ctx.font = '22px Arial';
-        ctx.fillText(`[${indice + 1}] ${opcao.nome}`, 150, inicioY + indice * 60);
-        
-        ctx.font = '16px Arial';
-        ctx.fillText(`Custo: ${opcao.custo} Ouro. Melhora: ${opcao.descricao}`, 150, inicioY + 25 + indice * 60);
-    });
-    
-    // Mostra a dificuldade que virá
-    const chanceTanqueAtual = Math.min(TIPOS_INIMIGOS.TANQUE.spawnChance + tanque_chance_mod, 70);
-    const proximaChanceTanque = Math.min(chanceTanqueAtual + 4, 70);
-    const proximoSpawnRate = Math.max(500, spawn_rate - 100);
-
-    ctx.fillStyle = 'cyan';
-    ctx.font = '18px Arial';
-    ctx.fillText(`PRÓXIMA DIFICULDADE: Chance Tanque ~${proximaChanceTanque}% | Spawn Rate ~${proximoSpawnRate}ms`, 150, canvas.height - 100);
-    
-    ctx.fillStyle = 'white';
-    ctx.font = '18px Arial';
-    ctx.fillText('Pressione o número correspondente para selecionar.', 150, canvas.height - 50);
+   
 }
 
 // LÓGICA PRINCIPAL
@@ -574,18 +578,36 @@ document.addEventListener('keyup', (e) => {
 
 
 // Função Tela Game Over
+// Função Tela Game Over - MODIFICADA
 function drawGameOverScreen() {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.fillStyle = 'white';
-    ctx.font = '48px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('QUACKNADO: FIM DE JOGO', canvas.width / 2, canvas.height / 2);
-    
-    ctx.font = '20px Arial';
-    ctx.fillText(`Score Final: ${score}`, canvas.width / 2, canvas.height / 2 + 50);
-    ctx.fillText('Pressione ESPAÇO para Recomeçar', canvas.width / 2, canvas.height / 2 + 80);
+    
+    // 1. Desenha o fundo da tela de Game Over
+    if (gameOverLoaded) {
+        // Desenha a imagem de Game Over ocupando todo o canvas
+        ctx.drawImage(gameOverImg, 0, 0, canvas.width, canvas.height);
+    } else {
+        // Fallback: Usa o fundo preto semi-transparente tradicional se a imagem não carregar
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = 'white';
+        ctx.font = '48px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('QUACKNADO: FIM DE JOGO', canvas.width / 2, canvas.height / 2 - 100);
+    }
+    
+    // 2. Desenha o Score e a Mensagem de Reinício
+    ctx.textAlign = 'center';
+    
+    // Usa fonte pixelada para o Score (assumindo que 'Pixel' está carregada via CSS)
+    ctx.fillStyle = 'yellow'; // Cor de destaque
+    ctx.font = '36px Pixel'; 
+    ctx.fillText(`Score Final: ${score}`, canvas.width / 2, 160);
+    
+    // Mensagem de Reinício
+    ctx.fillStyle = 'white';
+    ctx.font = '24px Pixel'; 
+    ctx.fillText('Pressione ESPACO para Recomecar', canvas.width / 2, canvas.height );
 }
 
 // Função para Desenhar o HUD 
@@ -718,28 +740,40 @@ function draw() {
 
 // GAME LOOP
 function gameLoop() {
-    if (isGameOver) { 
-        drawGameOverScreen(); 
-    } else if (estaEmMelhoria) { 
-        // Se estiver em melhoria, desenha o cenário estático e o menu por cima.
-        draw(); 
-        desenharMenuMelhoria(); 
-    } 
-    // MODIFICADO: Espera que TODOS os assets (pato, background, coração, inimigos) carreguem
-    else if (patoLoaded && bgLoaded && heartLoaded && inimigoSpritesLoaded) { 
-        update();
-        draw();
-    } else {
-        // Estado de Carregamento de Assets
-        ctx.fillStyle = 'black';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = 'white';
-        ctx.font = '30px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('Carregando...', canvas.width / 2, canvas.height / 2);
-    }
-    requestAnimationFrame(gameLoop);
+    // 1. ESTADO: FIM DE JOGO
+    if (isGameOver) { 
+        drawGameOverScreen(); 
+    } 
+    // 2. ESTADO: PAUSA PARA MELHORIA (UPGRADE)
+    else if (estaEmMelhoria) { 
+        // Apenas desenha o cenário atual (draw) e o menu por cima (desenharMenuMelhoria)
+        draw(); 
+        desenharMenuMelhoria(); 
+    } 
+    // 3. ESTADO: JOGO RODANDO (Verifica se todos os assets carregaram)
+    else if (patoLoaded && bgLoaded && heartLoaded && inimigoSpritesLoaded && gameOverLoaded && upgradeMenuLoaded) { 
+        update();
+        draw();
+    } 
+    // 4. ESTADO: CARREGAMENTO
+    else { 
+        // Mostra a tela de carregamento enquanto os assets não estão prontos
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white';
+        ctx.font = '30px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Carregando Assets do Quacknado...', canvas.width / 2, canvas.height / 2);
+    }
+    
+    // Continua chamando o loop
+    requestAnimationFrame(gameLoop);
 }
+
+// Inicia o loop
+window.onload = () => {
+    requestAnimationFrame(gameLoop);
+};
 
 // Inicia o loop
 window.onload = () => {
