@@ -776,6 +776,29 @@ window.onload = () => {
 };
 
 // Inicia o loop
+function startGame() {
+    // Esconde o menu principal
+    const menu = document.getElementById('main-menu');
+    if (menu) {
+        menu.style.display = 'none';
+    }
+
+    // Inicia o Game Loop (Este é o único lugar onde ele deve ser chamado agora)
+    requestAnimationFrame(gameLoop);
+}
+
+// Quando a janela carrega, configura o botão
 window.onload = () => {
-    requestAnimationFrame(gameLoop);
+    const startButton = document.getElementById('startButton');
+    
+    if (startButton) {
+        // Adiciona o listener para iniciar o jogo ao clique
+        startButton.addEventListener('click', startGame);
+    } else {
+        // Fallback: Inicia o jogo automaticamente se o botão não for encontrado
+        console.warn("Botão 'startButton' não encontrado. Iniciando jogo automaticamente.");
+        startGame();
+    }
+    
+    // NOTA: O gameLoop NÃO é mais chamado diretamente aqui!
 };
