@@ -1,23 +1,30 @@
+// CONFIGURAÇÃO E CONSTANTES INICIAIS -----------------------------------------------------------------------------------------
+// Define o ambiente do jogo e parâmetros iniciais
+
+
+// Inicializa o canvas e obtém o contexto
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
 canvas.width = 800;
 canvas.height = 600;
 
+// Define as velocidades bases e a taxa de tiro (variáveis fixas)
 const CONFIG = {
     PATO_VELOCIDADE_BASE: 3.5,
     BALAS_VELOCIDADE_BASE: 7,
     FIRE_RATE_BASE: 200,
-    INIMIGO_VELOCIDADE: 1,
+    INIMIGO_VELOCIDADE: 1, // está aqui pq é um parâmetro global que rege o movimento do sistema
 };
 
+//Atributos base para definição de inimigos
 const INIMIGO_TAMANHO_BASE = 80;
 const INIMIGO_VELOCIDADE_BASE = CONFIG.INIMIGO_VELOCIDADE;
 const INIMIGO_VIDA_BASE = 5; 
 
 // Mapeamento de Tipos de Inimigos 
 const TIPOS_INIMIGOS = {
-    // Caranguejo Padrão
+    // Caranguejo
     NORMAL: {
         tipo: 'normal',
         tamanho: INIMIGO_TAMANHO_BASE,
@@ -29,7 +36,7 @@ const TIPOS_INIMIGOS = {
         cor: '#8b4513',
         sprite: 'caranguejo', 
     },
-    // Polvo Tanque 
+    // Polvo 
     TANQUE: {
         tipo: 'tanque',
         tamanho: INIMIGO_TAMANHO_BASE * 2.2,
@@ -43,13 +50,13 @@ const TIPOS_INIMIGOS = {
     }
 };
 
-const tiposInimigoArray = Object.values(TIPOS_INIMIGOS);
-// ----------------------------------------------------
 
+// VARIÁVEIS DE ESTADO GLOBAL -------------------------------------------------------------------------------------------------
+// Define variáveis que controlam o estado atual do jogo
 
 // Controle de melhoria
-let estaEmMelhoria = false; 
-let inimigosDerrotadosDesdeMelhoria = 0; 
+let estaEmMelhoria = false; // boolean que pausa o jogo quando o menu de upgrade é ativado
+let inimigosDerrotadosDesdeMelhoria = 0; // contador para ativar upgrade quando =LIMIAR_MELHORIA
 const LIMIAR_MELHORIA = 10; 
 
 // Opções de melhorias
@@ -60,6 +67,7 @@ const OPCOES_MELHORIA = [
     { nome: "Semente Forte", descricao: "Velocidade do Projétil", atributo: "BALA_VELOCIDADE_MOD", custo: CUSTO_MELHORIA }
 ];
 
+// Estatísticas do pato
 let pato_velocidade = CONFIG.PATO_VELOCIDADE_BASE; 
 const pato_tamanho = 80; 
 let balas_velocidade = CONFIG.BALAS_VELOCIDADE_BASE; 
@@ -82,17 +90,20 @@ let pato = {
     tempoInvencibilidade: 0, 
 };
 
+// Constante piscar na invencibilidade
 const TEMPO_PISCAR = 500;
 const INTERVALO_PISCAR = 50;
 
 // Objeto Inimigos 
 let inimigos = []; 
 
-
 // Variáveis de Estado de Jogo e Recompensas
 let isGameOver = false; 
 let peixesDeOuro = 0; 
 let score = 0;
+
+// CARREGAMENTO DE ASSETS -----------------------------------------------------------------------------------------------------
+// Carrega todos os sprites e cria flags booleanas para indicaer se a imagem está carregada
 
 // Coração
 let heartImg = new Image();
@@ -110,16 +121,13 @@ bgImg.onload = () => { bgLoaded = true; };
 let spritesPato = {
     'up': new Image(), 'down': new Image(), 'left': new Image(), 'right': new Image(),
 };
-
 spritesPato.up.src = "assets/pato_up.png"; 
 spritesPato.down.src = "assets/pato_down.png"; 
 spritesPato.left.src = "assets/pato_left.png";
 spritesPato.right.src = "assets/pato_right.png";
-
 let patoLoaded = false;
 let loadedCount = 0;
 const totalSprites = Object.keys(spritesPato).length;
-
 for (const key in spritesPato) {
     spritesPato[key].onload = () => {
         loadedCount++;
@@ -178,7 +186,10 @@ let balas = [];
 const balas_tamanho = 5; 
 let lastFireTime = 0;
 
-// FUNÇÃO DE DETECÇÃO DE COLISÃO 
+// FUNÇÕES DE LÓGICA -------------------------------------------------------------------------------------------------------------
+// Executam ações centrais
+
+// Função de detecção de colisão
 function checkCollision(objA, objB) {
     const sizeA = objA.size || pato_tamanho;
     const sizeB = objB.size || pato_tamanho;
@@ -189,7 +200,7 @@ function checkCollision(objA, objB) {
            objA.y + sizeA > objB.y;
 }
 
-// FUNÇÃO DE CRIAÇÃO DE PROJÉTIL
+// Função de criação de projétil com base na direção de tiro
 function criaBala(dirX, dirY) {
     const bala = {
         x: pato.x + pato_tamanho / 2 - balas_tamanho / 2, 
@@ -202,7 +213,7 @@ function criaBala(dirX, dirY) {
     balas.push(bala);
 }
 
-// Função auxiliar para selecionar o template do inimigo
+// Função que decide qual inimigo será criado   
 function selecionaTipoInimigo() {
     const rand = Math.random() * 100;
     
@@ -254,7 +265,6 @@ function criaInimigo() {
 // Função de Controle de Estado
 function gameOver() {
     isGameOver = true;
-    console.log("QUACKNADO: FIM DE JOGO - Game Over Acionado.");
 }
 
 // Função de Reinício
@@ -263,6 +273,9 @@ function resetGame() {
     pato.vida = 5;
     peixesDeOuro = 0;
     score = 0;
+
+    inimigosDerrotadosDesdeMelhoria = 0; 
+    estaEmMelhoria = false; 
     
     // Resetando variáveis de velocidade/frequência/dificuldade 
     pato_velocidade = CONFIG.PATO_VELOCIDADE_BASE;
@@ -309,11 +322,11 @@ function aplicarMelhoria(atributoMelhoria, custo) {
 // Função para Desenhar o Menu de Melhoria
 function desenharMenuMelhoria() { 
     
-    // 1. Desenha o FUNDO PRETO SEMI-TRANSPARENTE 
+    // Desenha o fundo preto semi-transparente
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     ctx.fillRect(0, 0, canvas.width, canvas.height); 
 
-    // 2. Desenha a IMAGEM DE FUNDO
+    // Desenha a imagem de fundo
     if (upgradeMenuLoaded) {
         ctx.drawImage(upgradeMenuImg, 0, 0, canvas.width, canvas.height);
     } 
@@ -321,7 +334,7 @@ function desenharMenuMelhoria() {
     const TEXT_START_Y = 150; 
     const OPTIONS_START_Y = 250;
     
-    // 4. Ouro Atual 
+    // Ouro Atual 
     ctx.fillStyle = 'white';
     ctx.font = '35px Pixel'; 
     ctx.fillText(`Ouro Atual: ${peixesDeOuro}`, canvas.width - 100, TEXT_START_Y + 50);
@@ -332,13 +345,15 @@ function desenharMenuMelhoria() {
    
 }
 
-// LÓGICA PRINCIPAL
+// LÓGICA PRINCIPAL --------------------------------------------------------------------------------------------------------------
+
+// Atualiza a posição e estado de todos os objetos a cada frame
 function update() {
     let dx = 0;
     let dy = 0;
     const currentTime = Date.now();
 
-    // 1. Lógica de Movimento do Pato 
+    // Lógica de Movimento do Pato 
     if (keys.w) dy -= 1;
     if (keys.a) dx -= 1;
     if (keys.s) dy += 1;
@@ -356,7 +371,7 @@ function update() {
     pato.x = Math.max(0, Math.min(canvas.width - pato_tamanho, pato.x));
     pato.y = Math.max(0, Math.min(canvas.height - pato_tamanho, pato.y));
 
-    // 2. Lógica de Tiro 
+    // Lógica de Tiro 
     let fireDx = 0;
     let fireDy = 0;
 
@@ -387,7 +402,7 @@ function update() {
     }
 
 
-    // 3. Lógica de Movimento e Limpeza das Balas
+    // Lógica de Movimento e Limpeza das Balas
     for (let i = balas.length - 1; i >= 0; i--) {
         const bala = balas[i];
         
@@ -404,13 +419,13 @@ function update() {
         }
     }
 
-    // 4. Lógica de Spawn de Inimigos 
+    // Lógica de Spawn de Inimigos 
     if (currentTime > lastSpawnTime + spawn_rate) {
         criaInimigo();
         lastSpawnTime = currentTime;
     }
 
-    // 5. Lógica de Movimento e Colisão dos Inimigos
+    // Lógica de Movimento e Colisão dos Inimigos
     for (let i = inimigos.length - 1; i >= 0; i--) {
         const inimigoObj = inimigos[i];
 
@@ -489,7 +504,8 @@ function update() {
     }
 }
 
-// CONTROLE DE ENTRADA 
+// CONTROLE DE ENTRADA -----------------------------------------------------------------------------------------------------------
+
 document.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     
@@ -505,8 +521,6 @@ document.addEventListener('keydown', (e) => {
         }
         return; 
     }
-    // -----------------------------------------------------------
-
 
     // Controle de Reinício
     if (isGameOver && key === ' ') { 
@@ -542,21 +556,7 @@ document.addEventListener('keyup', (e) => {
     if (key === 'arrowright') keys.right = false; 
 });
 
-document.addEventListener('keyup', (e) => {
-    const key = e.key.toLowerCase();
-    // Movimento 
-    if (key === 'w') keys.w = false;
-    if (key === 'a') keys.a = false;
-    if (key === 's') keys.s = false;
-    if (key === 'd') keys.d = false;
-
-    // Tiro
-    if (e.key === 'ArrowUp') keys.up = false; 
-    if (e.key === 'ArrowLeft') keys.left = false; 
-    if (e.key === 'ArrowDown') keys.down = false; 
-    if (e.key === 'ArrowRight') keys.right = false; 
-});
-
+// FUNÇÕES DE RENDERIZAÇÃO -------------------------------------------------------------------------------------------------------
 
 // Função Tela Game Over
 function drawGameOverScreen() {
@@ -609,7 +609,7 @@ function drawHUD() {
         
         ctx.font = '40px Pixel'; 
         
-        // POSICIONAMENTO DO OURO
+        // Posicionamento do ouro
         ctx.fillText(`Ouro: ${peixesDeOuro}`, 15, START_Y + HEART_SIZE + 30); 
 
     } else {
@@ -617,14 +617,14 @@ function drawHUD() {
         ctx.fillText(`Ouro: ${peixesDeOuro}`, 10, 65);
     }
  
-    // SCORE 
+    // Score
     ctx.textAlign = 'right';
     ctx.fillStyle = 'white';
     ctx.font = '40px Pixel'; 
     ctx.fillText(`Score: ${score}`, canvas.width - 15, 40);
 }
 
-// RENDERIZAÇÃO
+// Renderização
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -707,24 +707,25 @@ function draw() {
     drawHUD();
 }
 
-// GAME LOOP
+// GAME LOOP ---------------------------------------------------------------------------------------------------------------------
+
 function gameLoop() {
-    // 1. ESTADO: FIM DE JOGO
+    // Estado: Fim de Jogo
     if (isGameOver) { 
         drawGameOverScreen(); 
     } 
-    // 2. ESTADO: PAUSA PARA MELHORIA 
+    // Estado: Pausa para Melhoria
     else if (estaEmMelhoria) { 
 
         draw(); 
         desenharMenuMelhoria(); 
     } 
-    // 3. ESTADO: JOGO RODANDO
+    // Estado: Jogo Rodando
     else if (patoLoaded && bgLoaded && heartLoaded && inimigoSpritesLoaded && gameOverLoaded && upgradeMenuLoaded) { 
         update();
         draw();
     } 
-    // 4. ESTADO: CARREGAMENTO
+    // Estado: Carregando
     else { 
     
         ctx.fillStyle = 'black';
@@ -738,11 +739,6 @@ function gameLoop() {
     // Continua chamando o loop
     requestAnimationFrame(gameLoop);
 }
-
-// Inicia o loop
-window.onload = () => {
-    requestAnimationFrame(gameLoop);
-};
 
 // Inicia o loop
 function startGame() {
